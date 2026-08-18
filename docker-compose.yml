@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: event-notification-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: event_notification
+      POSTGRES_USER: event_notification
+      POSTGRES_PASSWORD: event_notification_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - event_notification_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  event_notification_postgres_data:
