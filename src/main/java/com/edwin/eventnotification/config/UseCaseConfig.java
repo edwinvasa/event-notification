@@ -12,6 +12,7 @@ import com.edwin.eventnotification.application.port.in.DeliverNotificationPort;
 import com.edwin.eventnotification.application.port.in.IngestEventPort;
 import com.edwin.eventnotification.application.port.in.NotificationQueryPort;
 import com.edwin.eventnotification.application.port.in.ReplayNotificationPort;
+import com.edwin.eventnotification.application.port.out.DeliveryMetricsPort;
 import com.edwin.eventnotification.application.port.out.NotificationRepository;
 import com.edwin.eventnotification.application.port.out.SubscriptionPort;
 import com.edwin.eventnotification.application.port.out.WebhookSenderPort;
@@ -51,6 +52,7 @@ public class UseCaseConfig {
             RetryPolicy retryPolicy,
             Clock clock,
             RandomGenerator randomGenerator,
+            DeliveryMetricsPort deliveryMetricsPort,
             @Value("${delivery.retry.max-attempts}") int maxAttempts) {
         return new DeliverNotificationUseCase(
                 notificationRepository,
@@ -60,6 +62,7 @@ public class UseCaseConfig {
                 retryPolicy,
                 clock,
                 randomGenerator,
+                deliveryMetricsPort,
                 maxAttempts);
     }
 }

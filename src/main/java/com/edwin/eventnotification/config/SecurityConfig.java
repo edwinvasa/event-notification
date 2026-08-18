@@ -45,7 +45,10 @@ public class SecurityConfig {
 
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/actuator/health", "/actuator/prometheus")
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
                 .exceptionHandling(
                         ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);

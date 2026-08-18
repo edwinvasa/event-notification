@@ -46,6 +46,18 @@ public interface NotificationJpaRepository extends JpaRepository<NotificationJpa
 
     Optional<NotificationJpaEntity> findByIdAndClientId(UUID id, String clientId);
 
+    /**
+     * Backlog signal: notifications ready to be claimed right now (PENDING and due). Backs the
+     * {@code notification.backlog.pending} gauge - an operational/metrics query, not a business
+     * capability, so it is not exposed through the application-facing NotificationRepository port.
+     */
+    @Query("""
+            SELECT COUNT(n) FROM NotificationJpaEntity n
+            WHERE n.status = com.edwin.eventnotification.domain.notification.NotificationStatus.PENDING
+              AND (n.nextAttemptAt IS NULL OR n.nextAttemptAt <= :now)
+            """)
+    long countDuePending(@Param("now") Instant now);
+
     @Query("""
             SELECT n FROM NotificationJpaEntity n
             WHERE n.clientId = :clientId
