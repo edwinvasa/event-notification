@@ -77,15 +77,26 @@ La otra request será rechazada porque la notificación ya no estará en estado
 El replay genera trabajo que entra al mismo pipeline de entrega utilizado
 por las notificaciones normales.
 
-Para evitar que una gran cantidad de replays pueda desplazar el procesamiento
-de nuevos eventos provenientes del flujo normal, las notificaciones tendrán
-un origen que permita distinguir entre:
+Según ADR-006 ("Impacto de no persistir el origen del replay"), el modelo
+actual de `Notification` no persiste una señal que distinga, mientras una
+notification está `PENDING`, si quedó pendiente por un retry automático o
+porque fue reactivada mediante replay. Por lo tanto, el mecanismo de claim
+de los workers **no** prioriza el trabajo proveniente del flujo normal
+sobre el trabajo generado por replay: ambos compiten por el mismo turno de
+claim en igualdad de condiciones.
 
-- eventos normales provenientes de la ingesta
-- trabajo generado mediante replay
+La protección frente a que un volumen elevado de replays desplace el
+procesamiento normal se apoya, en esta iteración, exclusivamente en los
+mecanismos ya definidos:
 
-El mecanismo de claim de los workers dará prioridad al trabajo proveniente
-del flujo normal.
+- rate limiting por cliente sobre el endpoint de replay;
+- transición atómica `FAILED -> PENDING`;
+- bulkhead global de entrega;
+- bulkhead por cliente.
+
+Introducir un origen persistido para priorizar AUTOMATIC sobre
+MANUAL_REPLAY en el claim queda como evolución futura, documentada en
+ADR-006 ("Evolución futura").
 
 No se implementará un pool de workers separado exclusivamente para replay.
 
@@ -200,9 +211,12 @@ Mitigación:
 
 - Rate limiting por cliente.
 - Transición atómica `FAILED -> PENDING`.
-- Priorización de eventos normales sobre replays.
 - Bulkhead de entrega por cliente ya definido para limitar las llamadas
   concurrentes hacia cada webhook.
+
+No se prioriza el trabajo del flujo normal sobre el trabajo de replay en el
+mecanismo de claim (ver sección 3 y ADR-006); esta lista cubre las
+mitigaciones que sí están vigentes.
 
 ## Consecuencias
 
@@ -287,7 +301,9 @@ Esta decisión cubre:
 - HMAC
 - idempotencia
 - tratamiento de información sensible
-- prioridades entre trabajo normal y replay
+- aislamiento parcial entre trabajo normal y replay mediante rate limiting,
+  transición atómica y bulkheads (sin prioridad de selección en el claim,
+  ver sección 3)
 
 Quedan como evolución futura:
 
@@ -297,6 +313,8 @@ Quedan como evolución futura:
 - secret manager dedicado
 - cuotas de replay a largo plazo
 - circuit breaker distribuido por cliente
+- origen persistido en `Notification` para priorizar AUTOMATIC sobre
+  MANUAL_REPLAY en el claim (ver ADR-006, "Evolución futura")
 
 ## Decisiones relacionadas
 

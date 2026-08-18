@@ -1,0 +1,13 @@
+package com.edwin.eventnotification.adapter.out.persistence;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ApiKeyJpaRepository extends JpaRepository<ApiKeyJpaEntity, UUID> {
+
+    Optional<ApiKeyJpaEntity> findByApiKeyAndActiveTrue(String apiKey);
+
+    boolean existsByClientId(String clientId);
+}
