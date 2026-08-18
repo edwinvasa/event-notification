@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.edwin.eventnotification.application.port.out.DeliveryMetricsPort;
 import com.edwin.eventnotification.application.port.out.NotificationRepository;
 import com.edwin.eventnotification.application.port.out.SubscriptionPort;
 import com.edwin.eventnotification.application.port.out.WebhookDeliveryRequest;
@@ -53,6 +54,9 @@ class DeliverNotificationUseCaseTest {
     @Mock
     private WebhookSenderPort webhookSenderPort;
 
+    @Mock
+    private DeliveryMetricsPort deliveryMetricsPort;
+
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     private final RandomGenerator randomGenerator = RandomGenerator.getDefault();
     private final DeliveryErrorClassifier deliveryErrorClassifier = new DeliveryErrorClassifier();
@@ -67,6 +71,7 @@ class DeliverNotificationUseCaseTest {
                 retryPolicy,
                 clock,
                 randomGenerator,
+                deliveryMetricsPort,
                 maxAttempts);
     }
 
@@ -120,6 +125,10 @@ class DeliverNotificationUseCaseTest {
         assertThat(attempt.trigger()).isEqualTo(Trigger.AUTOMATIC);
         assertThat(attempt.urlUsed()).isEqualTo(subscription.webhookUrl());
         assertThat(attempt.occurredAt()).isEqualTo(NOW);
+
+        verify(deliveryMetricsPort).recordDeliveryAttempt(DeliveryOutcomeType.SUCCESS, 120L);
+        verify(deliveryMetricsPort, never()).recordRetryScheduled();
+        verify(deliveryMetricsPort, never()).recordDefinitiveFailure(any());
     }
 
     @Test
@@ -137,6 +146,10 @@ class DeliverNotificationUseCaseTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getFailureReason()).isEqualTo(FailureReason.PERMANENT_ERROR);
+
+        verify(deliveryMetricsPort).recordDeliveryAttempt(DeliveryOutcomeType.HTTP_ERROR, 120L);
+        verify(deliveryMetricsPort).recordDefinitiveFailure(FailureReason.PERMANENT_ERROR);
+        verify(deliveryMetricsPort, never()).recordRetryScheduled();
     }
 
     @Test
@@ -154,6 +167,10 @@ class DeliverNotificationUseCaseTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getNextAttemptAt()).isNotNull().isAfter(NOW);
+
+        verify(deliveryMetricsPort).recordDeliveryAttempt(DeliveryOutcomeType.HTTP_ERROR, 120L);
+        verify(deliveryMetricsPort).recordRetryScheduled();
+        verify(deliveryMetricsPort, never()).recordDefinitiveFailure(any());
     }
 
     @Test
@@ -219,6 +236,9 @@ class DeliverNotificationUseCaseTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getFailureReason()).isEqualTo(FailureReason.MAX_ATTEMPTS_EXCEEDED);
+
+        verify(deliveryMetricsPort).recordDefinitiveFailure(FailureReason.MAX_ATTEMPTS_EXCEEDED);
+        verify(deliveryMetricsPort, never()).recordRetryScheduled();
     }
 
     @Test

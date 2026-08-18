@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.random.RandomGenerator;
 
 import com.edwin.eventnotification.application.port.in.DeliverNotificationPort;
+import com.edwin.eventnotification.application.port.out.DeliveryMetricsPort;
 import com.edwin.eventnotification.application.port.out.NotificationRepository;
 import com.edwin.eventnotification.application.port.out.SubscriptionPort;
 import com.edwin.eventnotification.application.port.out.WebhookDeliveryRequest;
@@ -32,6 +33,7 @@ public class DeliverNotificationUseCase implements DeliverNotificationPort {
     private final RetryPolicy retryPolicy;
     private final Clock clock;
     private final RandomGenerator randomGenerator;
+    private final DeliveryMetricsPort deliveryMetricsPort;
     private final int maxAttempts;
 
     public DeliverNotificationUseCase(
@@ -42,6 +44,7 @@ public class DeliverNotificationUseCase implements DeliverNotificationPort {
             RetryPolicy retryPolicy,
             Clock clock,
             RandomGenerator randomGenerator,
+            DeliveryMetricsPort deliveryMetricsPort,
             int maxAttempts) {
         this.notificationRepository =
                 Objects.requireNonNull(notificationRepository, "notificationRepository must not be null");
@@ -52,6 +55,8 @@ public class DeliverNotificationUseCase implements DeliverNotificationPort {
         this.retryPolicy = Objects.requireNonNull(retryPolicy, "retryPolicy must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.randomGenerator = Objects.requireNonNull(randomGenerator, "randomGenerator must not be null");
+        this.deliveryMetricsPort =
+                Objects.requireNonNull(deliveryMetricsPort, "deliveryMetricsPort must not be null");
         this.maxAttempts = maxAttempts;
     }
 
@@ -77,6 +82,7 @@ public class DeliverNotificationUseCase implements DeliverNotificationPort {
 
         Instant now = clock.instant();
         DeliveryOutcome outcome = webhookSenderPort.send(request);
+        deliveryMetricsPort.recordDeliveryAttempt(outcome.outcomeType(), outcome.durationMillis());
 
         int attemptNumber = notification.getAttemptCount() + 1;
 
@@ -86,12 +92,15 @@ public class DeliverNotificationUseCase implements DeliverNotificationPort {
             Classification classification = deliveryErrorClassifier.classify(outcome);
             if (classification == Classification.PERMANENT) {
                 notification.recordDefinitiveFailure(now, FailureReason.PERMANENT_ERROR);
+                deliveryMetricsPort.recordDefinitiveFailure(FailureReason.PERMANENT_ERROR);
             } else if (attemptNumber >= maxAttempts) {
                 notification.recordDefinitiveFailure(now, FailureReason.MAX_ATTEMPTS_EXCEEDED);
+                deliveryMetricsPort.recordDefinitiveFailure(FailureReason.MAX_ATTEMPTS_EXCEEDED);
             } else {
                 Instant nextAttemptAt = retryPolicy.computeNextAttemptAt(
                         notification.getAttemptCount(), now, outcome.retryAfter(), randomGenerator);
                 notification.recordRetryableFailure(now, nextAttemptAt);
+                deliveryMetricsPort.recordRetryScheduled();
             }
         }
 
